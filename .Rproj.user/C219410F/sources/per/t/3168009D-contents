@@ -1,0 +1,325 @@
+---
+title: 'Generalized Linear Models Assignment 1: Athletes Data and Numerical Analysis.'
+author: "Jesse Smart"
+date: "31 July 2019"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Question 1:
+
+## Exploratory Data analysis
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#EDA
+dat = read.table("Assignment_1_Athletes.txt", header = TRUE)
+dat2 = read.table("Assignment_1_Athletes.txt", header = TRUE)
+library(ggplot2)
+library(dplyr)
+library(GGally)
+library(moments)
+attach(dat)
+
+skewness = skewness(LBM)
+kurtosis = kurtosis(LBM)
+```
+After a basic inspection of the data it is seen to have 202 observations of 9 variables. The variables 'Sex' is seen to be a discrete categorical varaible and is set as a factor vairable in one of two versions of the dataset which displays male as 0 and female as 1. The other 8 variables are all continuous. The response variable in this case is 'Lean Body Mass' which will be referred to as 'LBM' throughout this report. The variables statistics suggest that it is normally distributed, it has a skewness of 0.36 and a kurtosis of 2.76 where a normally distributed RV has a skewness of 0 and a kurtosis of 3.
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, out.height= '60%', out.width= '70%'}
+dat$Sex = as.factor(Sex)
+histogram_for_norm = hist(LBM, breaks = 20, main = "LBM Histogram with normal line")
+t = seq(0, 120, 0.2)
+normal_line = dnorm(t, mean(LBM), sd =
+      sd(LBM))*diff(histogram_for_norm$mids[1:2])*
+      length(LBM)
+lines(normal_line~t, col = 'blue')
+
+```
+
+The Histogram of LBM plotted with a normal line above it apears to fit well. Assuming that the data is normal we see that there are a few outiliers which might have to be removed from the data.
+
+```{r, echo=FALSE, ,message=FALSE, warning=FALSE}
+ggpairs(dat)
+```
+\vspace{5pt}
+
+The Scatterplot matrix displays strong correlations for LBM against Height (Ht) and Weight(Wt), this would be expected since LBM has physical relations to these variables. All variables have a positive relationship with LBM, the lowest correlation is 0.103 with White Cell Count 'WCC'. With regards to the relationships between variables; Ht and Wt have a correlation of 0.931, Hc and Hg have a correlation of 0.951, RCC has a strong linear relation with both Hg and Hc. These possible multicolinearities should be handled since they effect the accuracy of the model. A variable could be removed from the model since RCC, Hg, and Hc are all strongly correlated with one another. It will be considered to only keep the variable with the highest correlation with the response, LBM, or to use a stepwise function. 
+Moreover, the observations for male are generally higher than those for female in all Variables except for WCC.
+
+```{r, echo=FALSE, out.height= '60%', out.width= '70%'}
+ggplot(dat, aes(LBM, Ht, col=Sex))+geom_point()
+```
+
+\vspace{5pt}
+
+When inspecting the difference in response between male and female - using Height as a referrence variable, this plot makes it clear that male ( '0' in red) have a higher LBM than female ('1' in blue). This could lead to the response having a different relationship to each factor 0 or 1.
+\vspace{5pt}
+
+```{r, echo = FALSE, message=FALSE, out.height= '60%', out.width= '70%'}
+#Outliers
+
+OUTLIERS<-function(XDATA,YDATA)
+{
+  XDATA<-as.matrix(XDATA)
+  YDATA<-as.matrix(YDATA)
+  p<-NCOL(XDATA)
+  n<-NROW(XDATA)
+  k<-1+p
+  x<-matrix(c(rep(1,n),XDATA),nrow=n,ncol=k)
+  
+  # the response variable
+  y<-matrix(YDATA)
+  
+  # the beta matrix
+  BETA<-solve(t(x)%*%x)%*%t(x)%*%y
+  
+  # the hat matrix
+  H= x%*%solve(t(x)%*%x)%*%t(x)
+  
+  # the fitted values
+  fitted<-x%*%BETA
+  
+  # the residuals
+  ei<-y-x%*%BETA
+  
+  # the residual variance
+  e.e<-t(ei)%*%ei
+  s2<-e.e[1]/(n-k)
+  
+  # the diagonal elements of the hat matrix
+  hii<-diag(H)
+  
+  # the standardised residuals
+  zi<-ei/sqrt(s2*(1-hii))
+  
+  # the studentised residuals
+  s2.i<-(e.e[1]-(ei^2)/(1-hii))/(n-k-1)
+  ti<-ei/sqrt(s2.i*(1-hii))
+  
+  # Cooks distance
+  Di<-(zi^2)*hii/(k*(1-hii))
+  
+  # Cooks distance as preferred by Troskie
+  di<-(ti^2)*hii/(k*(1-hii))
+  
+  # Modified Cooks statistic : Atkinsons Statisic
+  Ai<-sqrt((n-k)*di)
+  
+  # all of the residual diagnostics
+  diags.<-matrix(round(cbind(zi,ti,hii,Di,di,Ai),digits=3),nrow=n)
+  colnames(diags.)<-c("Stand Res","Stud Res","h[i,i]","Cook","Cook*","Mod Cook")
+  
+  Notes=matrix(nrow=6)
+  Notes[1]="Stand Res = standardised residuals. Cut off (5%): |Stand Res| >2"
+  Notes[2]=paste("Stud Res = studentised residuals. Cut off (5%): |Stud Res|>",round(qt(0.975,n-k-1),digits=3))
+  Notes[3]=paste("h[i,i] = leverage, i'th diagonal of hat matrix. Cut off:",round(2*k/n,digits=3))
+  Notes[4]=paste("Cook = Cooks statistic, as defined by Cook. Cut off: ",round(4/(n-k-1),digits=3))
+  Notes[5]=paste("Cook* = Cooks statistic. (s2 with i'th observation). Cut off: ",round(4/(n-k-1),digits=3))
+  Notes[6]="Mod Cook = As outputted by Genstat. Cut off: 2 or 3"
+  
+  #the diagnostic plots
+  par(mfrow=c(3,2),mar=c(4,4,3,1))	
+  
+  plot(ti,type="n",main="Studentised Residuals",ylab="Studentised Residuals")
+  text(ti,labels=as.character(1:n),cex=0.85)
+  abline(h=c(-2,2),lty=2,col="red",lwd=2)
+  abline(h=0,lty=2,col="black")
+  
+  plot(hii,type="n",main="The Leverage of the i'th Observation",ylab="Leverage")
+  text(hii,labels=as.character(1:n),cex=0.85)
+  abline(h=2*k/n,lty=2,col="red",lwd=2)
+  abline(h=0,lty=2,col="black")
+  
+  plot(Di,type="n",main="Cooks Statistic",ylab="Cooks Statistic")
+  text(Di,labels=as.character(1:n),cex=0.85)
+  abline(h=4/(n-k-1),lty=2,col="red",lwd=2)
+  abline(h=0,lty=2,col="black")
+  
+  plot(di,type="n",main="Cooks* Statistic",ylab="Cooks* Statistic")
+  text(di,labels=as.character(1:n),cex=0.85)
+  abline(h=4/(n-k-1),lty=2,col="red",lwd=2)
+  abline(h=0,lty=2,col="black")
+  
+  plot(hii,Ai,type="n",xlab="Leverage",ylab="Mod Cook Statistic")
+  text(hii,Ai,labels=as.character(1:n),cex=0.85)
+  abline(h=c(-3,3),lty=2,col="red",lwd=2)
+  abline(h=c(-2,2),lty=2,col="green",lwd=2)
+  abline(h=0,lty=2,col="black")	
+  abline(v=0,lty=2,col="black")
+  abline(v=2*k/n,lty=2,col="red",lwd=2)
+  
+  plot(hii,ti,type="n",xlab="Leverage",ylab="Studentised Residuals")
+  text(hii,ti,labels=as.character(1:n),cex=0.85)
+  abline(h=c(-2,2),lty=2,col="red",lwd=2)
+  abline(h=0,lty=2,col="black")	
+  abline(v=0,lty=2,col="black")
+  abline(v=2*k/n,lty=2,col="red",lwd=2)
+  #polygon(c(2*k/n,1,1,2*k/n),c(2,2,10,10),col="lightgreen")
+  #polygon(c(2*k/n,1,1,2*k/n),c(-2,-2,-10,-10),col="lightgreen")
+  #points(hii,ti)
+  
+  #list(diags.=diags.,Notes=Notes)
+  Notes
+}
+dat_X = dat2[-c(4)]
+dat_Y = dat2[4]
+OUTLIERS(dat_X, dat_Y)
+```
+
+A function for identifying outliers produces the plots shown above. When considering values appearing to be influencial points on the middle two graphs, we observe points 11, 56, 113, 121, 160, 162, 163 and 166. When looking at the top left graph for a smaller cutt off interval, it is clear that observations 11, 56, 160, and 113 are definite outliers, these observations must be removed in order to ensure that our model leads to accurate inference. 
+The top right graph displays the observations with high leverage, observations not present already as outliers are 68, 163, 181, 166, 194 have high leverage and would lead too innaccurate statistics. All data points inaccurately representing our data will be removed.
+
+
+\vspace{5pt}
+
+## Hypothesis
+
+We predict that there is a significant difference in the effect on response between Male and Female, since the variable is coded '0' or '1' this could be seen by noticing a significant difference between a model with Sex included versus a model with out Sex. In order to test this we can perform an analysis of deviance. Further it is predicted that Ht, wt, RCC, Hc and Hg will be the significant terms in the model fitting, these are the variables with strongest correllation with the response.
+
+\vspace{5pt}
+
+
+## Model Fitting
+
+
+```{r, echo=FALSE}
+dat_no_out = dat[-c(11, 56, 68, 113, 160, 163, 166, 181, 194),]
+fit1 = glm(LBM ~ Sex + Wt + Ht + RCC + WCC + Hc + Hg + Ferr, family = gaussian(link = identity), data = dat_no_out)
+summary(fit1)
+```
+
+The full model is fitted above using the Genreal linear model function. It shows us that the variables Sex, Wt, Ht and WCC are significant. We can make decisions about the other variables using a stepwise function.
+
+\vspace{5pt}
+
+```{r, echo=FALSE,include=FALSE }
+library(MASS)
+stepwise1 = stepAIC(fit1, scope = list(upper=fit1, lower=~1))
+stepwise1$anova
+```
+The stepwise function Produced a model which includes the variables: Sex, height, weight, white cell count, hematocrit and plasma ferritin.  From the anova of this model, it has an AIC of 884.79 with a deviance of 1018.72 and 186 degrees of freedom. 
+
+```{r, echo=FALSE, include=FALSE}
+fit2 = glm(LBM ~ Sex * Ht + Sex * Wt + Ht * Wt + log(WCC) + log(Hc), family = gaussian(link = identity), data = dat_no_out)
+fit2_noSex = glm(LBM ~  Ht * Wt + log(WCC) + log(Hc), family = gaussian(link = identity), data = dat_no_out)
+fit_no_interaction = glm(LBM ~  Sex + Ht * Wt + log(WCC) + log(Hc), family = gaussian(link = identity), data = dat_no_out)
+summary(fit2)
+summary(fit2_noSex)
+```
+
+Using the correlations between variables, interraction terms were constructed as well as log transformations of the variables WCC, Ferr and Hc. The interaction term between Sex and both Ht and Wt are to ensure that there is indeed a significant difference between Male and female LBM observations. The interaction term between Ht and Weight was less significant than expected. The log transformations of the variables WCC, Ferr and Hc were tested since they appeared to be positively skewed on the scatterplot. The variable Ferr was found to be insignificant both as is and transformed and was therefore removed. We have now found the the best possible model for this data set. It has produced an AIC of 856.48 and a residual deviance of 861.68 with 184 degrees of freedom. We can now perform further tests on our fit.
+
+```{r,echo=FALSE}
+anova(fit2_noSex, fit2, test = 'Chisq')
+anova(fit_no_interaction, fit2, test = 'Chisq')
+```
+\vspace{5pt}
+The variable Sex was removed entirely from a model and tested against a model with Sex and its interraction terms included. This was done using an anova table which calculated whether a Chi squared statistic from the difference in deviance between the two models was significant. The variable Sex was found to make a significant positive effect in the model. With this being confirmed, we can now determine whether the effects for male are the same as female. It is necessary to include the interaction terms with sex into a model and compare it to a model that contains Sex yet has no interraction terms. Another anova table was produced and the model containing interraction terms was found to be statisticaly significant, thus we can say that there is most likely a different effect for males and females.
+
+```{r, echo=FALSE, out.height= '60%', out.width= '70%'}
+par(mfrow=c(2,2))
+plot(fit2)
+```
+
+
+The plot of the residuals vs fitted shows that the residuals appear to be randomly distributed, this is evident of a good fit. The points on the QQplot appear to be somewhat following the line, this reiterates the suggestion of normality and normality of the residuals. Lastly, the last plot displaying leverages suggests that almost none of the observations are overly influential as we have a very positive skewness. Further, only one point exceeds cooks distance yet none go passed the dotted bounds.
+
+
+## Conclusion
+\vspace{10pt}
+The response variable LBM can be assumed to be distributed normally. The explanatory variables Sex, height, weight, White cell count and hematocrit are all statiscally related to the response and all being positively related. The variables WCC and Hc under went a log transformation in order to fit the response better. Interaction terms were found between the variables height and weight, which was expected. The terms Ht and Wt both had an interaction with the variable Sex. Further, it was found that Male had a different effect on responce to female, and most variables were higher for male than for female.
+
+***
+
+# Question 2:
+
+## A
+
+Newton-Rhapson is a recursive or updating style function used for estimating the roots or zero's of a function by producing a more accurate value after every iteration. An intial estimation is made by inspection and the final value is known at a point of convergence and the input of the function equals the output. This method can be used for estimating parameters by using the likelihood function and its derivative and substituting in an initial estimation of the parameter.
+The method of scoring is a Newton like method which is used to solve the maximum likelihood function numerically using the score function. The score function is the gradient of the log-likelihood function with respect to the parameter vector. The difference between these two methods is the way that the updating equation is created.
+\vspace{5pt}
+
+## B
+
+$\begin{aligned}
+\\ f(y,\theta,\lambda) & = \frac{\lambda y^{\lambda-1}}{\theta^\lambda}\exp(-(\frac{y}{\theta})^\lambda)
+\\ &=  \exp(\ln(\lambda) + (\lambda-1)\ln(y) - \lambda\ln(\theta) - (\frac{y}{\theta})^\lambda
+\\ &=  \exp(\ln(\lambda) + (\lambda-1)\ln(y) - \lambda\ln(\theta) - (\frac{y}{\theta})^\lambda
+\\ &=  \exp(-\frac{y^\lambda}{\theta^\lambda} - \lambda\ln(\theta) + \ln(\lambda)+(\lambda-1)\ln(y))
+\\ \therefore E(Y^\lambda) &= - \frac{c\prime(\theta)}{b\prime(\theta)}
+\\ For\: \lambda = 1: 
+\\ E(Y) = \hat{\theta}
+\end{aligned}$
+ 
+This method of moments estimator can be useful because it is an estimation of the parameter which is assumed to be efficient enough when performing method of scoring.
+
+## C
+
+```{r}
+#Q2
+dat_pressure = read.table('Table 4.1 Failure Times of Pressure Vessels.txt', h = TRUE)
+attach(dat_pressure)
+
+y = lifetimes
+l  = function(theta, lambda){sum((lambda -1)*log(y)+log(lambda) - lambda*log(theta)-(y/theta)^lambda)}
+U  = function(theta, lambda){sum(-lambda/theta+lambda*y^lambda/theta^(lambda+1))}
+U. = function(theta, lambda){sum(lambda/theta^2-(lambda+1)*lambda*y^lambda/theta^(lambda+2))}
+Jfx = function(theta, lambda){length(y)*lambda^2/theta^2}
+scoring = function(theta0,m, lambda)
+{
+   theta = rep(theta0,m)
+   for(i in 2:m)
+   {
+       theta[i] = theta[i-1] + U(theta[i-1], lambda )/Jfx(theta[i-1], lambda )
+   }
+   return(theta)
+}
+
+
+```
+
+## D
+
+```{r, echo=FALSE, out.height= '60%', out.width= '70%'}
+plot(scoring(mean(lifetimes),10, 2),type = 'l', ylim = c(0,10000))
+
+```
+
+
+## E
+```{r, echo=FALSE, out.height= '60%', out.width= '70%'}
+inputs = seq(from = 1, to = 3, length.out = 101)
+lambda_vals = data.frame(lambda = inputs, theta = 0, log_likelihood = 0)
+log_l  = function(theta){sum(log(lambda3)+(lambda3-1)*log(y)-lambda3*log(theta)
+                             -(y/theta)^lambda3)}
+
+for (i in 1:length(lambda_vals[,1]))
+{
+  previous = 50
+  next1 = 0
+  while (abs(previous-next1) > 0.0001)
+  {
+    score = scoring(mean(y), 10, lambda_vals[i,1])
+    previous = next1
+    next1 = score[2]
+  }
+  lambda_vals[i,2] = score[2]
+  lambda3 = lambda_vals[i,1]
+  lambda_vals[i,3] = log_l(lambda_vals[i,2])
+}
+
+plot(lambda_vals[,1], lambda_vals[,3], ylab = "Log-Likelihood", 
+     xlab = "Lambda", main = "Log-Likelihood Lambda Estimation")
+```
+
+# Appendix
+
+```{r, ref.label=knitr::all_labels(), echo=TRUE, eval=F}
+
+```
+ 

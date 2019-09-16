@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1567345510254.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1401845132",
+    "id" : "3168009D",
+    "lastKnownWriteTime" : 1565191960,
+    "last_content_update" : 1565191960,
+    "path" : "C:/Users/smart/Desktop/tuts/STA3043/Assignment 1/Assignment 1/ASS_1 sta3043.Rmd",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "310,27",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}
